@@ -3,7 +3,7 @@ using System.Linq;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
-using System.Threading;
+using System.Timers;
 using TShockAPI.Hooks;
 using Microsoft.Xna.Framework;
 
@@ -12,7 +12,7 @@ namespace PlayerSwapPlugin
     [ApiVersion(2, 1)]
     public class PlayerSwapPlugin : TerrariaPlugin
     {
-        private System.Threading.Timer timer;
+        private System.Timers.Timer timer;
         private Random random;
         private bool pluginEnabled = true;
 
@@ -21,6 +21,9 @@ namespace PlayerSwapPlugin
         public override string Name => "PlayerSwapPlugin";
         public override Version Version => new Version(1, 0, 5);
         public static Configuration Config;
+        private bool countdownStarted = false;
+        private int countdownTime;
+        private System.Timers.Timer countdownTimer;
 
         public PlayerSwapPlugin(Main game) : base(game)
         {
@@ -39,70 +42,78 @@ namespace PlayerSwapPlugin
             args.Player?.SendSuccessMessage("[{0}] 重新加载配置完毕。", typeof(PlayerSwapPlugin).Name);
         }
 
-
-        private bool isCountingDown = false;
-
-        private long lastSwapTime = 0; // 上次交换的时间
-
         public override void Initialize()
         {
+            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 插件初始化开始");
+
             GeneralHooks.ReloadEvent += ReloadConfig;
             random = new Random();
-            // 创建一个定时器，指定回调方法、状态对象、延迟时间和周期时间
-            timer = new System.Threading.Timer(Timer_Elapsed, null, TimeSpan.FromSeconds(Config.IntervalSeconds), TimeSpan.FromMilliseconds(-1));
+            timer = new System.Timers.Timer();
+            timer.Interval = TimeSpan.FromSeconds(Config.IntervalSeconds).TotalMilliseconds;
+            timer.AutoReset = true;
+            timer.Elapsed += Timer_Elapsed;
+            timer.Start();
             TShockAPI.Commands.ChatCommands.Add(new Command("swapplugin.toggle", SwapToggle, "swaptoggle", "更改随机互换"));
+
+            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 插件初始化完成");
         }
 
-        private void Timer_Elapsed(object state)
+        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             if (!pluginEnabled)
                 return;
+
             SwapPlayers(); // 执行交换玩家位置的操作
-                           // 更新 lastSwapTime 为当前时间
-            lastSwapTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
-            // 计算剩余时间
-            long currentTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
-            long elapsedTime = currentTime - lastSwapTime;
-            int remainingTime = Config.IntervalSeconds - (int)elapsedTime;
-            TShock.Log.ConsoleInfo($"1处剩余时间：{remainingTime}秒");
 
-            if (Config.BroadcastRemainingTimeEnabled)
+            // 重新设置计时器的间隔时间
+            timer.Interval = TimeSpan.FromSeconds(Config.IntervalSeconds).TotalMilliseconds;
+            TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 计时器间隔已重置为 {Config.IntervalSeconds} 秒");
+
+            // 检查是否需要开始倒数读秒
+            TShock.Log.ConsoleInfo($"timer.Interval为 {timer.Interval} 秒");
+            TShock.Log.ConsoleInfo($"Config.BroadcastRemainingTimeThreshold为 {Config.BroadcastRemainingTimeThreshold} 秒");
+            if (Config.BroadcastRemainingTimeThreshold * 1000 > 0 && countdownStarted == false && timer.Interval <= Config.BroadcastRemainingTimeThreshold * 1000)
             {
-                TShock.Log.ConsoleInfo($"3处剩余时间：{remainingTime}秒");
-                if (remainingTime <= Config.BroadcastRemainingTimeThreshold && remainingTime >= 0)
-                {
-                    // 在一个新的任务中执行异步方法
-                    Task.Run(async () =>
-                    {
-                        await StartCountdown(remainingTime);
-                        // 释放定时器
-                        timer.Dispose();
-                    });
-                }
+                TShock.Log.ConsoleInfo($"开始读秒");
+                countdownStarted = true;
+
+                // 将 countdownTime 的值设置为 Config.IntervalSeconds
+                countdownTime = Config.IntervalSeconds;
+
+                countdownTimer = new System.Timers.Timer();
+                countdownTimer.Interval = 1000; // 每秒触发一次
+                countdownTimer.Elapsed += CountdownTimer_Elapsed;
+                countdownTimer.Start();
+
+                TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 开始倒计时，剩余时间 {countdownTime} 秒");
             }
         }
 
 
-
-
-        private async Task StartCountdown(int remainingTime)
+        private void CountdownTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            while (remainingTime > 0)
+            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 倒计时触发");
+
+            if (countdownTime <= 0)
             {
-                TShock.Log.ConsoleInfo($"剩余时间：{remainingTime}秒");
-                await Task.Delay(1000);
-                remainingTime--;
+                countdownTimer.Stop();
+                countdownStarted = false;
+                TShock.Log.ConsoleInfo("PlayerSwapPlugin: 倒计时结束");
+                return;
             }
+
+            // 广播剩余传送时间的倒计时信息
+            if (Config.BroadcastPlayerSwapEnabled)
+            {
+                TShock.Utils.Broadcast($"剩余传送时间：{countdownTime}秒", Color.Yellow);
+            }
+
+            TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 剩余传送时间 {countdownTime} 秒");
+            countdownTime--;
         }
 
 
-        private void BroadcastRemainingTime(int remainingTime)
-        {
-            if (Config.BroadcastRemainingTimeEnabled)
-            {
-                TShock.Utils.Broadcast($"剩余传送时间：{remainingTime}秒", Color.Yellow);
-            }
-        }
+
 
 
         private void SwapPlayers()
@@ -119,9 +130,6 @@ namespace PlayerSwapPlugin
 
             if (Config.MultiPlayerMode)
             {
-                // 更新 lastSwapTime
-                lastSwapTime = DateTime.Now.Ticks / TimeSpan.TicksPerSecond;
-
                 // 多人打乱模式逻辑
                 PlayerRandPos();
             }
@@ -226,16 +234,13 @@ namespace PlayerSwapPlugin
             {
                 if (timer != null)
                 {
-                    // 删除这一行
-                    // timer.Stop();
-                    // 只保留这一行
+                    timer.Stop();
                     timer.Dispose();
                     timer = null;
                 }
             }
             base.Dispose(disposing);
         }
-
 
         private void SwapToggle(CommandArgs args)
         {
