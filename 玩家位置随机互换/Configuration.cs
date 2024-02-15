@@ -10,7 +10,7 @@ namespace PlayerSwapPlugin
         public static readonly string FilePath = Path.Combine(TShock.SavePath, "玩家位置随机互换配置.json");
 
         [JsonProperty("传送间隔秒")]
-        public int IntervalSeconds { get; set; } = 300;
+        public int IntervalSeconds { get; set; } = 10;
 
         [JsonProperty("双人模式允许玩家和自己交换")]
         public bool AllowSamePlayerSwap { get; set; } = true;
