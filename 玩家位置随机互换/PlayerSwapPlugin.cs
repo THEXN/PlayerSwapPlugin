@@ -1,11 +1,10 @@
-﻿using System;
-using System.Linq;
+﻿using Microsoft.Xna.Framework;
+using System.Timers;
 using Terraria;
 using TerrariaApi.Server;
 using TShockAPI;
-using System.Timers;
 using TShockAPI.Hooks;
-using Microsoft.Xna.Framework;
+
 
 namespace PlayerSwapPlugin
 {
@@ -15,15 +14,13 @@ namespace PlayerSwapPlugin
         private System.Timers.Timer timer;
         private Random random;
         private bool pluginEnabled = true;
-
-        public override string Author => "肝帝熙恩";
+        public override string Author => "肝帝熙恩,少司命";
         public override string Description => "一个插件，用于在指定时间后随机交换玩家位置。";
         public override string Name => "PlayerSwapPlugin";
         public override Version Version => new Version(1, 0, 5);
         public static Configuration Config;
-        private bool countdownStarted = false;
-        private int countdownTime;
-        private System.Timers.Timer countdownTimer;
+        // 在 PlayerSwapPlugin 类中定义一个实例字段
+        private System.Threading.Timer broadcastTimer;
 
         public PlayerSwapPlugin(Main game) : base(game)
         {
@@ -36,16 +33,27 @@ namespace PlayerSwapPlugin
             Config.Write(Configuration.FilePath);
         }
 
-        private static void ReloadConfig(ReloadEventArgs args)
+        private void ReloadConfig(ReloadEventArgs args)
         {
             LoadConfig();
             args.Player?.SendSuccessMessage("[{0}] 重新加载配置完毕。", typeof(PlayerSwapPlugin).Name);
+            // 在 ReloadConfig 方法中更新 broadcastTimer 的状态
+            this.broadcastTimer.Change(0, 1000);
         }
 
+        // 在方法外面定义一个TimerState类，用于存储倒计时的状态
+        public class TimerState
+        {
+            public int Countdown { get; set; } // 倒计时的秒数
+            public int Threshold { get; set; } // 广播的阈值
+            public TimerState(int countdown, int threshold)
+            {
+                Countdown = countdown;
+                Threshold = threshold;
+            }
+        }
         public override void Initialize()
         {
-            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 插件初始化开始");
-
             GeneralHooks.ReloadEvent += ReloadConfig;
             random = new Random();
             timer = new System.Timers.Timer();
@@ -54,67 +62,49 @@ namespace PlayerSwapPlugin
             timer.Elapsed += Timer_Elapsed;
             timer.Start();
             TShockAPI.Commands.ChatCommands.Add(new Command("swapplugin.toggle", SwapToggle, "swaptoggle", "更改随机互换"));
-
-            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 插件初始化完成");
+            // 在 Initialize 方法中创建和初始化 broadcastTimer
+            broadcastTimer = new System.Threading.Timer(BroadcastMessage, new TimerState(Config.IntervalSeconds, Config.BroadcastRemainingTimeThreshold), Timeout.Infinite, 1000);
         }
 
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             if (!pluginEnabled)
                 return;
-
             SwapPlayers(); // 执行交换玩家位置的操作
-
-            // 重新设置计时器的间隔时间
             timer.Interval = TimeSpan.FromSeconds(Config.IntervalSeconds).TotalMilliseconds;
-            TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 计时器间隔已重置为 {Config.IntervalSeconds} 秒");
+            // 重置System.Threading.Timer对象，让它开始倒计时
+            broadcastTimer.Change(0, 1000);
+        }//倒计时逻辑
 
-            // 检查是否需要开始倒数读秒
-            TShock.Log.ConsoleInfo($"timer.Interval为 {timer.Interval} 秒");
-            TShock.Log.ConsoleInfo($"Config.BroadcastRemainingTimeThreshold为 {Config.BroadcastRemainingTimeThreshold} 秒");
-            if (Config.BroadcastRemainingTimeThreshold * 1000 > 0 && countdownStarted == false && timer.Interval <= Config.BroadcastRemainingTimeThreshold * 1000)
-            {
-                TShock.Log.ConsoleInfo($"开始读秒");
-                countdownStarted = true;
-
-                // 将 countdownTime 的值设置为 Config.IntervalSeconds
-                countdownTime = Config.IntervalSeconds;
-
-                countdownTimer = new System.Timers.Timer();
-                countdownTimer.Interval = 1000; // 每秒触发一次
-                countdownTimer.Elapsed += CountdownTimer_Elapsed;
-                countdownTimer.Start();
-
-                TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 开始倒计时，剩余时间 {countdownTime} 秒");
-            }
-        }
-
-
-        private void CountdownTimer_Elapsed(object sender, ElapsedEventArgs e)
+        private void BroadcastMessage(object state)
         {
-            TShock.Log.ConsoleInfo("PlayerSwapPlugin: 倒计时触发");
-
-            if (countdownTime <= 0)
+            // 将state参数转换为TimerState对象
+            TimerState timerState = state as TimerState;
+            // 判断倒计时是否小于或等于阈值
+            if (timerState.Countdown <= timerState.Threshold && Config.BroadcastRemainingTimeEnabled)
             {
-                countdownTimer.Stop();
-                countdownStarted = false;
-                TShock.Log.ConsoleInfo("PlayerSwapPlugin: 倒计时结束");
-                return;
+                // 向所有玩家发送一条消息，格式化倒计时
+                TShockAPI.TSPlayer.All.SendMessage($"注意：还有{timerState.Countdown}秒就要交换位置了！", Color.Yellow);
             }
-
-            // 广播剩余传送时间的倒计时信息
-            if (Config.BroadcastPlayerSwapEnabled)
+            // 判断倒计时是否等于0
+            if (timerState.Countdown == 0)
             {
-                TShock.Utils.Broadcast($"剩余传送时间：{countdownTime}秒", Color.Yellow);
+                // 停止计时器
+                broadcastTimer.Change(Timeout.Infinite, 1000);
+                // 重置倒计时
+                timerState.Countdown = Config.IntervalSeconds;
+                // 发送一条不同的消息，表示已经交换了所有玩家的位置
+                if(Config.BroadcastPlayerSwapEnabled)
+                    {
+                    TShockAPI.TSPlayer.All.SendMessage($"已经交换所有玩家位置！", Color.Green);
+                }
             }
-
-            TShock.Log.ConsoleInfo($"PlayerSwapPlugin: 剩余传送时间 {countdownTime} 秒");
-            countdownTime--;
-        }
-
-
-
-
+            else
+            {
+                // 将倒计时减1
+                timerState.Countdown--;
+            }
+        }//倒计时广播
 
         private void SwapPlayers()
         {
@@ -131,7 +121,7 @@ namespace PlayerSwapPlugin
             if (Config.MultiPlayerMode)
             {
                 // 多人打乱模式逻辑
-                PlayerRandPos();
+                PlayerRandPos2();
             }
             else
             {
@@ -139,7 +129,7 @@ namespace PlayerSwapPlugin
                 SwapTwoPlayers(eligiblePlayers);
 
             }
-        }
+        }//根据配置文件选择模式
 
         private void SwapTwoPlayers(List<TSPlayer> players)
         {
@@ -170,11 +160,66 @@ namespace PlayerSwapPlugin
             // 广播玩家交换位置信息
             if (Config.BroadcastPlayerSwapEnabled)
             {
-                TShock.Utils.Broadcast($"玩家 {player1.Name} 和玩家 {player2.Name} 交换了位置！", Color.Yellow);
+                TShockAPI.TSPlayer.All.SendMessage($"玩家 {player1.Name} 和玩家 {player2.Name} 交换了位置！", Color.Green);
             }
-        }
+        }//仅交换双人模式
+        private void SwapPositions(TSPlayer player1, TSPlayer player2)
+        {
+            // 保存 player1 当前位置
+            int tempX1 = player1.TileX;
+            int tempY1 = player1.TileY;
+
+            // 保存 player2 当前位置
+            int tempX2 = player2.TileX;
+            int tempY2 = player2.TileY;
+
+            // 传送 player1 至 player2 的位置
+            player1.Teleport(tempX2 * 16, tempY2 * 16);
+
+            // 传送 player2 至 player1 的位置
+            player2.Teleport(tempX1 * 16, tempY1 * 16);
+        }//双人模式,交换逻辑
+
 
         private void PlayerRandPos()
+        {
+            var players = TShock.Players.Where(p => p != null && p.Active && !p.Dead).ToList();
+            if (players.Count > 1)
+            {
+                if (players.Count % 2 == 0)
+                    EvenRandTp(players);
+                else
+                    OddnRandTp(players);
+            }
+        }//有问题的按奇数偶数交换，多人混乱模式
+        private void EvenRandTp(List<TSPlayer> players)
+        {
+            while (players.Count > 0)
+            {
+                var ply1 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
+                var ply2 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault(x => x != ply1)!;
+                var pos = ply1.TPlayer.position;
+                var pos2 = ply2.TPlayer.position;
+                ply2.Teleport(pos.X, pos.Y);
+                ply1.Teleport(pos2.X, pos2.Y);
+                players.Remove(ply1);
+                players.Remove(ply2);
+            }
+        }
+        private void OddnRandTp(List<TSPlayer> players)
+        {
+            var ply1 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
+            players.Remove(ply1);
+            EvenRandTp(players);
+            var ply2 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
+            var pos = ply1.TPlayer.position;
+            var pos2 = ply2.TPlayer.position;
+            ply1.Teleport(pos2.X, pos2.Y);
+            ply2.Teleport(pos.X, pos.Y);
+        }
+
+
+        private void PlayerRandPos2()
         {
             var players = TShock.Players.Where(p => p != null && p.Active && !p.Dead).ToList();
             if (players.Count() > 1)
@@ -187,8 +232,7 @@ namespace PlayerSwapPlugin
                     player.Teleport(vec.X, vec.Y);
                 }
             }
-        }
-
+        }//递归，可能造成崩溃，但是正常交换，多人混乱模式
         private List<Microsoft.Xna.Framework.Vector2> SpwanPlayerPos(IEnumerable<TSPlayer> players)
         {
             List<Microsoft.Xna.Framework.Vector2> v = new();
@@ -210,23 +254,6 @@ namespace PlayerSwapPlugin
             return v;
         }
 
-
-        private void SwapPositions(TSPlayer player1, TSPlayer player2)
-        {
-            // 保存 player1 当前位置
-            int tempX1 = player1.TileX;
-            int tempY1 = player1.TileY;
-
-            // 保存 player2 当前位置
-            int tempX2 = player2.TileX;
-            int tempY2 = player2.TileY;
-
-            // 传送 player1 至 player2 的位置
-            player1.Teleport(tempX2 * 16, tempY2 * 16);
-
-            // 传送 player2 至 player1 的位置
-            player2.Teleport(tempX1 * 16, tempY1 * 16);
-        }
 
         protected override void Dispose(bool disposing)
         {
@@ -277,10 +304,6 @@ namespace PlayerSwapPlugin
                 case "allowself":
                     Config.AllowSamePlayerSwap = !Config.AllowSamePlayerSwap;
                     args.Player.SendSuccessMessage($"允许玩家和自己交换位置已{(Config.AllowSamePlayerSwap ? "启用" : "禁用")}。");
-                    break;
-                case "allowmulti":
-                    Config.AllowMultipleTeleportEnabled = !Config.AllowMultipleTeleportEnabled;
-                    args.Player.SendSuccessMessage($"允许多个玩家传送到同一位置已{(Config.AllowMultipleTeleportEnabled ? "启用" : "禁用")}。");
                     break;
                 case "broadcasttime":
                     Config.BroadcastRemainingTimeEnabled = !Config.BroadcastRemainingTimeEnabled;

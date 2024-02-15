@@ -15,23 +15,19 @@ namespace PlayerSwapPlugin
         [JsonProperty("双人模式允许玩家和自己交换")]
         public bool AllowSamePlayerSwap { get; set; } = true;
 
+        [JsonProperty("多人打乱模式")]
+        public bool MultiPlayerMode { get; set; } = false;
+
         [JsonProperty("广播剩余传送时间")]
         public bool BroadcastRemainingTimeEnabled { get; set; } = true;
 
-        [JsonProperty("广播交换倒计时")]
+        [JsonProperty("广播交换倒计时阈值（暂时无法热重载）")]
         public int BroadcastRemainingTimeThreshold { get; set; } = 10; // 剩余传送时间小于等于10秒时广播
 
         [JsonProperty("广播玩家交换位置信息")]
         public bool BroadcastPlayerSwapEnabled { get; set; } = true;
 
-        [JsonProperty("多人打乱模式")]
-        public bool MultiPlayerMode { get; set; } = false;
 
-        [JsonProperty("多人打乱允许玩家传送到自己的位置")]
-        public bool AllowSelfTeleportEnabled { get; set; } = true;
-
-        [JsonProperty("多人打乱允许多个玩家传送到同一个位置")]
-        public bool AllowMultipleTeleportEnabled { get; set; } = false;
 
         public void Write(string path)
         {
