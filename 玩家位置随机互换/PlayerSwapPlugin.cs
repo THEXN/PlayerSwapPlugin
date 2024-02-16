@@ -34,9 +34,14 @@ namespace PlayerSwapPlugin
 
         private void ReloadConfig(ReloadEventArgs args)
         {
+            // 重新加载配置文件
             LoadConfig();
             args.Player?.SendSuccessMessage("[{0}] 重新加载配置完毕。", typeof(PlayerSwapPlugin).Name);
-            // 在 ReloadConfig 方法中更新 broadcastTimer 的状态
+
+            // 更新广播剩余时间阈值
+            Config.BroadcastRemainingTimeThreshold = Config.BroadcastRemainingTimeThreshold; // 这里应该是从配置文件中读取的值
+
+            // 更新 broadcastTimer 的状态
             this.broadcastTimer.Change(0, 1000);
         }
 
