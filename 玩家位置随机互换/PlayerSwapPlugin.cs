@@ -121,7 +121,7 @@ namespace PlayerSwapPlugin
             if (Config.MultiPlayerMode)
             {
                 // 多人打乱模式逻辑
-                PlayerRandPos2();
+                PlayerRandPos2(eligiblePlayers);
             }
             else
             {
@@ -219,33 +219,40 @@ namespace PlayerSwapPlugin
         }
 
 
-        private void PlayerRandPos2()
+        private void PlayerRandPos2(List<TSPlayer> players)
         {
-            var players = TShock.Players.Where(p => p != null && p.Active && !p.Dead).ToList();
+            // 接受一个玩家列表作为参数，而不是直接获取所有玩家
             if (players.Count() > 1)
             {
+                // 生成一个随机的位置列表
                 var pos = SpwanPlayerPos(players);
                 for (var i = 0; i < players.Count(); i++)
                 {
                     var player = players[i];
                     var vec = pos[i];
+                    // 传送玩家到对应的位置
                     player.Teleport(vec.X, vec.Y);
                 }
             }
-        }//递归，可能造成崩溃，但是正常交换，多人混乱模式
+        }//多人打乱模式
+
         private List<Microsoft.Xna.Framework.Vector2> SpwanPlayerPos(IEnumerable<TSPlayer> players)
         {
             List<Microsoft.Xna.Framework.Vector2> v = new();
+            // 获取所有玩家的当前位置
             var playerPos = players.Select(p => p.TPlayer.position).ToList();
             players.ForEach(p =>
             {
+                // 从位置列表中随机选择一个不同于自己的位置
                 var pos = playerPos.OrderBy(x => Guid.NewGuid()).FirstOrDefault(x => x != p.TPlayer.position);
                 if (pos == Microsoft.Xna.Framework.Vector2.Zero)
                 {
+                    // 如果没有找到，就递归调用自己
                     v = SpwanPlayerPos(players);
                 }
                 else
                 {
+                    // 如果找到，就将该位置加入到结果列表，并从位置列表中移除
                     v.Add(pos);
                     playerPos.Remove(pos);
                 }
@@ -253,6 +260,7 @@ namespace PlayerSwapPlugin
             });
             return v;
         }
+
 
 
         protected override void Dispose(bool disposing)
