@@ -305,24 +305,13 @@ namespace PlayerSwapPlugin
                     Config.AllowSamePlayerSwap = !Config.AllowSamePlayerSwap;
                     args.Player.SendSuccessMessage($"允许玩家和自己交换位置已{(Config.AllowSamePlayerSwap ? "启用" : "禁用")}。");
                     break;
-                case "broadcasttime":
-                    Config.BroadcastRemainingTimeEnabled = !Config.BroadcastRemainingTimeEnabled;
-                    args.Player.SendSuccessMessage($"广播剩余传送时间已{(Config.BroadcastRemainingTimeEnabled ? "启用" : "禁用")}。");
-                    break;
-                case "broadcastswap":
-                    Config.BroadcastPlayerSwapEnabled = !Config.BroadcastPlayerSwapEnabled;
-                    args.Player.SendSuccessMessage($"广播玩家交换位置信息已{(Config.BroadcastPlayerSwapEnabled ? "启用" : "禁用")}。");
-                    break;
                 case "help":
                     args.Player.SendInfoMessage("用法:");
+                    args.Player.SendInfoMessage("/swaptoggle enable - 切换随机位置互换的状态");
                     args.Player.SendInfoMessage("/swaptoggle timer - 切换广播剩余传送时间的状态");
                     args.Player.SendInfoMessage("/swaptoggle swap - 切换广播玩家交换位置信息的状态");
-                    args.Player.SendInfoMessage("/swaptoggle enable - 切换随机位置互换的状态");
                     args.Player.SendInfoMessage("/swaptoggle interval <传送间隔秒> - 设置传送间隔时间（秒）");
-                    args.Player.SendInfoMessage("/swaptoggle allowself - 切换允许玩家和自己交换位置的状态");
-                    args.Player.SendInfoMessage("/swaptoggle allowmulti - 切换允许多个玩家传送到同一位置的状态");
-                    args.Player.SendInfoMessage("/swaptoggle broadcasttime - 切换广播剩余传送时间的状态");
-                    args.Player.SendInfoMessage("/swaptoggle broadcastswap - 切换广播玩家交换位置信息的状态");
+                    args.Player.SendInfoMessage("/swaptoggle allowself - 切换允许双人模式玩家和自己交换位置的状态");
                     break;
 
                 default:
