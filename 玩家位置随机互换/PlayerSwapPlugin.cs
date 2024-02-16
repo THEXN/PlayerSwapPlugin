@@ -13,7 +13,6 @@ namespace PlayerSwapPlugin
     {
         private System.Timers.Timer timer;
         private Random random;
-        private bool pluginEnabled = true;
         public override string Author => "肝帝熙恩,少司命";
         public override string Description => "一个插件，用于在指定时间后随机交换玩家位置。";
         public override string Name => "PlayerSwapPlugin";
@@ -60,16 +59,29 @@ namespace PlayerSwapPlugin
             timer.Interval = TimeSpan.FromSeconds(Config.IntervalSeconds).TotalMilliseconds;
             timer.AutoReset = true;
             timer.Elapsed += Timer_Elapsed;
-            timer.Start();
+            if (Config.pluginEnabled) // 检查插件是否启用
+            {
+                timer.Start(); // 如果启用，则启动定时器
+            }
+
             TShockAPI.Commands.ChatCommands.Add(new Command("swapplugin.toggle", SwapToggle, "swaptoggle", "随机互换"));
             // 在 Initialize 方法中创建和初始化 broadcastTimer
             broadcastTimer = new System.Threading.Timer(BroadcastMessage, new TimerState(Config.IntervalSeconds, Config.BroadcastRemainingTimeThreshold), Timeout.Infinite, 1000);
         }
 
+
         private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            if (!pluginEnabled)
+            var players = TShock.Players.Where(p => p != null && p.Active).ToList();
+            // 获取没有特定权限的玩家列表
+            var eligiblePlayers = players.Where(p => !p.HasPermission("noPlayerSwap")).ToList();
+
+            if (eligiblePlayers.Count < 2)
                 return;
+
+            if (!Config.pluginEnabled)
+                return;
+
             SwapPlayers(); // 执行交换玩家位置的操作
             timer.Interval = TimeSpan.FromSeconds(Config.IntervalSeconds).TotalMilliseconds;
             // 重置System.Threading.Timer对象，让它开始倒计时
@@ -109,9 +121,6 @@ namespace PlayerSwapPlugin
         private void SwapPlayers()
         {
             var players = TShock.Players.Where(p => p != null && p.Active).ToList();
-            if (players.Count < 2)
-                return;
-
             // 获取没有特定权限的玩家列表
             var eligiblePlayers = players.Where(p => !p.HasPermission("noPlayerSwap")).ToList();
 
@@ -121,7 +130,7 @@ namespace PlayerSwapPlugin
             if (Config.MultiPlayerMode)
             {
                 // 多人打乱模式逻辑
-                PlayerRandPos2(eligiblePlayers);
+                PlayerRandPos3(eligiblePlayers);
             }
             else
             {
@@ -180,88 +189,28 @@ namespace PlayerSwapPlugin
             player2.Teleport(tempX1 * 16, tempY1 * 16);
         }//双人模式,交换逻辑
 
-
-        private void PlayerRandPos()
-        {
-            var players = TShock.Players.Where(p => p != null && p.Active && !p.Dead).ToList();
-            if (players.Count > 1)
-            {
-                if (players.Count % 2 == 0)
-                    EvenRandTp(players);
-                else
-                    OddnRandTp(players);
-            }
-        }//有问题的按奇数偶数交换，多人混乱模式
-        private void EvenRandTp(List<TSPlayer> players)
-        {
-            while (players.Count > 0)
-            {
-                var ply1 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
-                var ply2 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault(x => x != ply1)!;
-                var pos = ply1.TPlayer.position;
-                var pos2 = ply2.TPlayer.position;
-                ply2.Teleport(pos.X, pos.Y);
-                ply1.Teleport(pos2.X, pos2.Y);
-                players.Remove(ply1);
-                players.Remove(ply2);
-            }
-        }
-        private void OddnRandTp(List<TSPlayer> players)
-        {
-            var ply1 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
-            players.Remove(ply1);
-            EvenRandTp(players);
-            var ply2 = players.OrderBy(x => Guid.NewGuid()).FirstOrDefault()!;
-            var pos = ply1.TPlayer.position;
-            var pos2 = ply2.TPlayer.position;
-            ply1.Teleport(pos2.X, pos2.Y);
-            ply2.Teleport(pos.X, pos.Y);
-        }
-
-
-        private void PlayerRandPos2(List<TSPlayer> players)
+        public void PlayerRandPos3(List<TSPlayer> players)
         {
             // 接受一个玩家列表作为参数，而不是直接获取所有玩家
-            if (players.Count() > 1)
+            if (players.Count < 2)
+                return;
+
+            // 随机打乱玩家列表的顺序
+            var sp = players.OrderBy(c => Guid.NewGuid()).ToList();
+
+            // 用一个for循环，每次取出两个玩家，交换他们的位置
+            for (var i = 1; i < players.Count; i++)
             {
-                // 生成一个随机的位置列表
-                var pos = SpwanPlayerPos(players);
-                for (var i = 0; i < players.Count(); i++)
-                {
-                    var player = players[i];
-                    var vec = pos[i];
-                    // 传送玩家到对应的位置
-                    player.Teleport(vec.X, vec.Y);
-                }
+                (sp[i - 1].TPlayer.position, sp[i].TPlayer.position) =
+                (sp[i].TPlayer.position, sp[i - 1].TPlayer.position);
             }
-        }//多人打乱模式
 
-        private List<Microsoft.Xna.Framework.Vector2> SpwanPlayerPos(IEnumerable<TSPlayer> players)
-        {
-            List<Microsoft.Xna.Framework.Vector2> v = new();
-            // 获取所有玩家的当前位置
-            var playerPos = players.Select(p => p.TPlayer.position).ToList();
-            players.ForEach(p =>
+            // 对每个玩家，传送他们到新的位置
+            foreach (var player in players)
             {
-                // 从位置列表中随机选择一个不同于自己的位置
-                var pos = playerPos.OrderBy(x => Guid.NewGuid()).FirstOrDefault(x => x != p.TPlayer.position);
-                if (pos == Microsoft.Xna.Framework.Vector2.Zero)
-                {
-                    // 如果没有找到，就递归调用自己
-                    v = SpwanPlayerPos(players);
-                }
-                else
-                {
-                    // 如果找到，就将该位置加入到结果列表，并从位置列表中移除
-                    v.Add(pos);
-                    playerPos.Remove(pos);
-                }
-
-            });
-            return v;
+                player.Teleport(player.TPlayer.position.X, player.TPlayer.position.Y);
+            }
         }
-
-
 
         protected override void Dispose(bool disposing)
         {
@@ -300,8 +249,8 @@ namespace PlayerSwapPlugin
                     break;
                 case "enable":
                 case "开关":
-                    pluginEnabled = !pluginEnabled;
-                    args.Player.SendSuccessMessage($"随机位置互换已{(pluginEnabled ? "启用" : "禁用")}。");
+                    Config.pluginEnabled = !Config.pluginEnabled;
+                    args.Player.SendSuccessMessage($"随机位置互换已{(Config.pluginEnabled ? "启用" : "禁用")}。");
                     break;
                 case "interval":
                 case "传送间隔":

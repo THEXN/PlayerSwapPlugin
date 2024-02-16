@@ -9,6 +9,9 @@ namespace PlayerSwapPlugin
     {
         public static readonly string FilePath = Path.Combine(TShock.SavePath, "玩家位置随机互换配置.json");
 
+        [JsonProperty("总开关")]
+        public bool pluginEnabled = true;
+
         [JsonProperty("传送间隔秒")]
         public int IntervalSeconds { get; set; } = 10;
 
