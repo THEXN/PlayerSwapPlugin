@@ -9,7 +9,7 @@ using TShockAPI.Hooks;
 namespace PlayerSwapPlugin
 {
     [ApiVersion(2, 1)]
-    public class PlayerSwapPlugin : TerrariaPlugin
+    public class PlayerRandomSwapper : TerrariaPlugin
     {
         public override string Author => "肝帝熙恩,少司命";
         public override string Description => "一个插件，用于在指定时间后随机交换玩家位置。";
@@ -20,7 +20,7 @@ namespace PlayerSwapPlugin
         private int RemainingSeconds { get; set; }
         public static Configuration Config;
 
-        public PlayerSwapPlugin(Main game) : base(game)
+        public PlayerRandomSwapper(Main game) : base(game)
         {
             LoadConfig();
         }
@@ -34,7 +34,7 @@ namespace PlayerSwapPlugin
         private void ReloadConfig(ReloadEventArgs args)
         {
             LoadConfig();
-            args.Player?.SendSuccessMessage("[{0}] 重新加载配置完毕。", typeof(PlayerSwapPlugin).Name);
+            args.Player?.SendSuccessMessage("[{0}] 重新加载配置完毕。", typeof(PlayerRandomSwapper).Name);
             RemainingSeconds = Config.IntervalSeconds;
         }
 
