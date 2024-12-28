@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "玩家位置随机互换", "玩家位置随机互换\玩家位置随机互换.csproj", "{BBE15F06-BBA6-49AE-9AB2-440793506B3F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PlayerRandomSwapper", "玩家位置随机互换\PlayerRandomSwapper.csproj", "{BBE15F06-BBA6-49AE-9AB2-440793506B3F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
